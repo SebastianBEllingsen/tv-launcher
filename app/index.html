@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <title>Home</title>
 <meta name="viewport" content="width=1920, height=1080">
-<!-- No network access at all: the page can load itself and nothing else. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data:; connect-src 'none'; img-src 'self' data:; frame-src 'none'; object-src 'none'">
+<!-- Network access is limited to the TV's own local API (127.0.0.1:8001), used to launch apps. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data:; connect-src http://127.0.0.1:8001 http://localhost:8001; img-src 'self' data:; frame-src 'none'; object-src 'none'">
 <style>
 /* Written for Chromium 69 (Tizen 5.5): no inset, no flex gap, no clamp(),
    no aspect-ratio, no backdrop-filter. */
@@ -83,7 +83,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0b0c10;
 var STATIC = (window.TV_APPS || []).slice();
 
 // Favourites, in this order, matched on app name. Edit freely.
-var FAVS = [/^youtube$/i,/netflix/i,/disney/i,/\bmax\b|hbo/i,/prime/i,/apple\s*tv/i,
+var FAVS = [/^youtube$/i,/tizentube|tizenbrew/i,/netflix/i,/disney/i,/\bmax\b|hbo/i,/prime/i,/apple\s*tv/i,
             /^tv\s*2|tv2/i,/nrk/i,/viaplay/i,/spotify/i,/plex/i,/jellyfin/i];
 
 // Tile colours (name regex -> [from, to]). Anything else gets a stable colour from its name.
@@ -154,12 +154,26 @@ function focus(first){
 var toastTimer;
 function toast(t){el('toastT').textContent=t;el('toast').className='on';clearTimeout(toastTimer);
   toastTimer=setTimeout(function(){el('toast').className=''},3200)}
+// Inside TizenBrew the page has no `tizen` API, so we ask the TV's own local
+// REST endpoint to start the app. POST with no body/headers = simple request,
+// so no CORS preflight; the response is opaque and we only care that it was sent.
+var TV_API='http://127.0.0.1:8001/api/v2/applications/';
 function launch(a){
+  if(window.tizen&&tizen.application&&tizen.application.launch){
+    try{tizen.application.launch(a.id,function(){},function(e){toast('Could not open '+a.name+' ('+(e&&e.message||'error')+')')});return}catch(e){}
+  }
+  toast('Opening '+a.name+'…');
+  var done=false;
+  function fail(why){ if(done)return;done=true;toast('Could not open '+a.name+' ('+why+')') }
   try{
-    if(window.tizen&&tizen.application&&tizen.application.launch){
-      tizen.application.launch(a.id,function(){},function(e){toast('Could not open '+a.name+' ('+(e&&e.message||'error')+')')});
-    }else toast('Not running on a TV – would open '+a.name);
-  }catch(e){toast('Could not open '+a.name+' ('+(e&&e.message||e)+')')}
+    fetch(TV_API+encodeURIComponent(a.id),{method:'POST',mode:'no-cors'})
+      .then(function(){done=true})
+      .catch(function(e){ // fallback: plain XHR
+        try{var x=new XMLHttpRequest();x.open('POST',TV_API+encodeURIComponent(a.id));
+          x.onerror=function(){fail('TV API unreachable')};x.onload=function(){done=true};x.send()}
+        catch(e2){fail(e2&&e2.message||'blocked')}
+      });
+  }catch(e){fail(e&&e.message||'blocked')}
 }
 function showDbg(on){
   var d=el('dbg');d.style.display=on?'block':'none';if(!on)return;
