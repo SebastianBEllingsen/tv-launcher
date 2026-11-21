@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <title>Home</title>
 <meta name="viewport" content="width=1920, height=1080">
-<!-- Network access is limited to the TV's own local API (127.0.0.1:8001), used to launch apps. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data:; connect-src http://127.0.0.1:8001 http://localhost:8001; img-src 'self' data:; frame-src 'none'; object-src 'none'">
+<!-- Network access is limited to this module's own local service (127.0.0.1:8097), used to launch apps. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data:; connect-src http://127.0.0.1:8097; img-src 'self' data:; frame-src 'none'; object-src 'none'">
 <style>
 /* Written for Chromium 69 (Tizen 5.5): no inset, no flex gap, no clamp(),
    no aspect-ratio, no backdrop-filter. */
@@ -154,27 +154,31 @@ function focus(first){
 var toastTimer;
 function toast(t){el('toastT').textContent=t;el('toast').className='on';clearTimeout(toastTimer);
   toastTimer=setTimeout(function(){el('toast').className=''},3200)}
-// Inside TizenBrew the page has no `tizen` API, so we ask the TV's own local
-// REST endpoint to start the app. POST with no body/headers = simple request,
-// so no CORS preflight; the response is opaque and we only care that it was sent.
-var TV_API='http://127.0.0.1:8001/api/v2/applications/';
+// Inside TizenBrew the page has no `tizen` API and can't call the TV's API
+// (127.0.0.1:8001) directly, so it asks this module's own service
+// (service/service.js, started by TizenBrew) which forwards to the TV.
+var SVC='http://127.0.0.1:8097';
+function svc(method,path,cb){
+  var x=new XMLHttpRequest();
+  x.open(method,SVC+path);x.setRequestHeader('X-Launcher','1');x.timeout=8000;
+  x.onload=function(){var j=null;try{j=JSON.parse(x.responseText)}catch(e){}cb(null,j)};
+  x.onerror=function(){cb('launcher service not reachable')};
+  x.ontimeout=function(){cb('timed out')};
+  try{x.send()}catch(e){cb(e&&e.message||'blocked')}
+}
 function launch(a){
   if(window.tizen&&tizen.application&&tizen.application.launch){
     try{tizen.application.launch(a.id,function(){},function(e){toast('Could not open '+a.name+' ('+(e&&e.message||'error')+')')});return}catch(e){}
   }
   toast('Opening '+a.name+'…');
-  var done=false;
-  function fail(why){ if(done)return;done=true;toast('Could not open '+a.name+' ('+why+')') }
-  try{
-    fetch(TV_API+encodeURIComponent(a.id),{method:'POST',mode:'no-cors'})
-      .then(function(){done=true})
-      .catch(function(e){ // fallback: plain XHR
-        try{var x=new XMLHttpRequest();x.open('POST',TV_API+encodeURIComponent(a.id));
-          x.onerror=function(){fail('TV API unreachable')};x.onload=function(){done=true};x.send()}
-        catch(e2){fail(e2&&e2.message||'blocked')}
-      });
-  }catch(e){fail(e&&e.message||'blocked')}
+  svc('POST','/launch/'+encodeURIComponent(a.id),function(err,j){
+    if(err)return toast('Could not open '+a.name+' ('+err+')');
+    if(!j||!j.ok)toast('Could not open '+a.name+' ('+(j&&j.error||'unknown error')+')');
+  });
 }
+// Tell the user straight away if the service isn't running (e.g. TizenBrew
+// hasn't picked up the module's serviceFile yet).
+setTimeout(function(){svc('GET','/ping',function(err){if(err)toast('Launcher service not running – reopen TizenBrew')})},1500);
 function showDbg(on){
   var d=el('dbg');d.style.display=on?'block':'none';if(!on)return;
   var h='';apps.slice().sort(function(a,b){return a.name.localeCompare(b.name)}).forEach(function(a){

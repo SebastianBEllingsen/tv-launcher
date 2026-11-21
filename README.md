@@ -4,8 +4,12 @@ A quiet, ad-free home screen for Samsung Tizen TVs, as a
 [TizenBrew](https://github.com/reisxd/TizenBrew) app module. Written for
 Tizen 5.5 (Chromium 69): no frosted-glass blur, no modern CSS.
 
-- Makes **no network requests**. A content-security rule limits the page to
-  loading itself.
+- Makes **no internet requests**. A content-security rule limits the page to
+  itself and the module's own local service.
+- `service/service.js` runs on the TV (TizenBrew starts it). Module pages can't
+  call the TV's API (127.0.0.1:8001) directly, so the page asks the service on
+  127.0.0.1:8097, which forwards launch requests. It only answers TizenBrew's
+  page origin and requires an `X-Launcher` header.
 - Tiles are coloured wordmarks (no logos or artwork are bundled).
 - Favourites row is matched by app name (`FAVS` in `app/index.html`).
 

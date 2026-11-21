@@ -5,6 +5,7 @@
   "description": "A quiet, ad-free home screen for Samsung Tizen TVs. No network access.",
   "packageType": "app",
   "appPath": "app/index.html",
+  "serviceFile": "service/service.js",
   "keys": [],
   "license": "MIT"
 }
