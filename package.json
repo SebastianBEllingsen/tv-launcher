@@ -1,0 +1,10 @@
+{
+  "name": "tv-launcher",
+  "appName": "Home",
+  "version": "0.1.0",
+  "description": "A quiet, ad-free home screen for Samsung Tizen TVs. No network access.",
+  "packageType": "app",
+  "appPath": "app/index.html",
+  "keys": [],
+  "license": "MIT"
+}
